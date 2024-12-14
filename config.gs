@@ -1,11 +1,9 @@
-function init_config() {
+function onOpen() {
   SpreadsheetApp.getUi().createMenu('Config')
     .addItem('load scripts', 'readScriptFromURL')
     .addItem('load from cell', 'readScriptFromSheetCell')
     .addToUi();
 }
-
-init_config();
 
 function readScriptFromSheetCell() {
       const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -25,6 +23,6 @@ function readScriptFromURL() {
       };
       
       const script = UrlFetchApp.fetch(endpoint, options);
-
+      Logger.log(script);
       eval(script.getContentText());
 }

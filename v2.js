@@ -18,7 +18,8 @@ const ZONES = {
 };
 
 const DEFAULTS = {
-  INIT_DAYS_TO_DOWNLOAD: 10,
+  INIT_WELLNESSDAYS_TO_DOWNLOAD: 300,
+  INIT_DAYS_TO_DOWNLOAD: 50,
   MIN_INCLUDED_LAP_DISTANCE_METERS: 800 // if >1km
 };
   
@@ -56,6 +57,7 @@ function clearJournals() {
   var { rawSheet, lapsSheet } = _getNeededSheets();
   rawSheet.clear();
   lapsSheet.clear();
+  _getOrCreateSheet("Wellness").clear();
 }
 
 
@@ -98,7 +100,36 @@ function fillLaps () {
 }
 
 function fillWellnessJournal() {
-  const wellnessList = fetchIntervalsWellnessData(userId, apiKey, from, till)
+
+    const sheet = _getOrCreateSheet("Wellness");
+
+
+  const userId = readSettings("intervals_userId");
+  const apiKey = readSettings("intervals_apikey");
+
+  var lastDate = sheet.getRange(2, 2).getValue();
+  const lastId = sheet.getRange(2, 1).getValue();
+  
+  if (lastDate === "") {
+    lastDate = getDateString(DEFAULTS.INIT_WELLNESSDAYS_TO_DOWNLOAD);
+  } else {
+    lastDate = new Date(lastDate).toISOString().split('T')[0];
+  }
+
+  const till = getDateString();
+  const from = lastDate;
+
+  const wellnessList = fetchIntervalsWellnessData(userId, apiKey, from, till);
+
+
+  // Write column names
+  WELLNESS_DATA.forEach((d, idx) => sheet.getRange(1, idx+1).setValue(_getFieldName(d))); 
+  wellnessList.forEach(w => {
+    sheet.insertRowAfter(1);
+    WELLNESS_DATA.forEach((field, idx) => sheet.getRange(2, idx+1).setValue(
+        _getFieldValue(field, w)
+    ));
+  })
 }
 
 function fillJournal() {
@@ -132,7 +163,7 @@ function fillJournal() {
 
   // Write column names
   RUN_DATA.forEach((d, idx) => rawSheet.getRange(1, idx+1).setValue(_getFieldName(d))); 
-  RUN_LAPS_DATA.forEach((d, idx) => lapsSheet.getRange(1, idx+4).setValue(_getFieldName(d))); 
+  RUN_LAPS_DATA.forEach((d, idx) => lapsSheet.getRange(1, idx+5).setValue(_getFieldName(d))); 
 
   for(var i = 0; i < activities.length; i++) {
     const activity = activities[i];
@@ -147,25 +178,45 @@ function fillJournal() {
       if (_shouldGetLaps(activity)) {
         const laps = fetchIntervalsActivityIntervals(activity.id, apiKey);        
         
-        laps.icu_intervals.filter(i=>_shouldIncludeInterval(i)).forEach((interval, interval_no) => {
-            // if (_shouldIncludeInterval(interval)) {
+        laps.icu_intervals
+          .filter(i=>_shouldIncludeInterval(i))
+          .forEach((interval, interval_no) => {
               lapsSheet.insertRowAfter(1);
               lapsSheet.getRange(1, 1).setValue("reference activity id");
               lapsSheet.getRange(2, 1).setValue(activity.id);
               lapsSheet.getRange(1, 2).setValue("Activity Name");
               lapsSheet.getRange(2, 2).setValue(activity.name);
-              lapsSheet.getRange(1, 3).setValue("Interval Number");
-              lapsSheet.getRange(2, 3).setValue(parseInt(interval_no) + 1);
+              lapsSheet.getRange(1, 3).setValue("Activity Date");
+              lapsSheet.getRange(2, 3).setValue(activity.start_date_local);
+              lapsSheet.getRange(1, 4).setValue("Interval Number");
+              lapsSheet.getRange(2, 4).setValue(parseInt(interval_no) + 1);
 
-              RUN_LAPS_DATA.forEach((d, idx) => lapsSheet.getRange(2, idx + 4).setValue( 
+              RUN_LAPS_DATA.forEach((d, idx) => lapsSheet.getRange(2, idx + 5).setValue( 
                 _getFieldValue(d, interval) 
               ))
-            // }
             })
       }
     }
   }
 }
+
+const WELLNESS_DATA = [
+    "id",
+    "weight",
+    "restingHR",
+    "hrv",
+    {name: "sleep (hours)", fn: w => w.sleepSecs/3600 },
+    "sleepScore",
+    "sleepQuality",
+    "avgSleepingHR",
+    "soreness",
+    "fatigue",
+    "stress",
+    "mood",
+    "motivation",
+    "injury",
+    "comments"
+];
 
 // max_speed	average_speed   calories lthr	icu_resting_hr	icu_weight average_altitude	min_altitude	max_altitude  
 const RUN_DATA = [
@@ -211,7 +262,7 @@ const RUN_LAPS_DATA = [
   "average_cadence", 
   "total_elevation_gain", 
   "average_gradient",
-  { name: "zone", fn: a => _getHrZone(a.average_heartrate) }
+  { name: "zone", fn: a => _getHrZone(a.average_heartrate) },
 ];
 
 function _getHrZone(hr) {
@@ -249,6 +300,15 @@ function _getNeededSheets() {
   return {rawSheet, lapsSheet};
 }
 
+function _getOrCreateSheet(sheetName) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(sheetName);
+  
+  if (!sheet) {
+    sheet = ss.insertSheet().setName(sheetName);
+  }
+  return sheet;
+}
 
 // Filter activities to include in journal
 function _shouldIncludeInJournal(activity) {

@@ -18,7 +18,8 @@ const ZONES = {
 };
 
 const DEFAULTS = {
-  INIT_DAYS_TO_DOWNLOAD: 100,
+  INIT_DAYS_TO_DOWNLOAD: 10,
+  MIN_INCLUDED_LAP_DISTANCE_METERS: 800 // if >1km
 };
   
 /**
@@ -146,19 +147,21 @@ function fillJournal() {
       if (_shouldGetLaps(activity)) {
         const laps = fetchIntervalsActivityIntervals(activity.id, apiKey);        
         
-        laps.icu_intervals.forEach((interval, interval_no) => {
-            lapsSheet.insertRowAfter(1);
-            lapsSheet.getRange(1, 1).setValue("reference activity id");
-            lapsSheet.getRange(2, 1).setValue(activity.id);
-            lapsSheet.getRange(1, 2).setValue("Activity Name");
-            lapsSheet.getRange(2, 2).setValue(activity.name);
-            lapsSheet.getRange(1, 3).setValue("Interval Number");
-            lapsSheet.getRange(2, 3).setValue(parseInt(interval_no) + 1);
+        laps.icu_intervals.filter(i=>_shouldIncludeInterval(i)).forEach((interval, interval_no) => {
+            // if (_shouldIncludeInterval(interval)) {
+              lapsSheet.insertRowAfter(1);
+              lapsSheet.getRange(1, 1).setValue("reference activity id");
+              lapsSheet.getRange(2, 1).setValue(activity.id);
+              lapsSheet.getRange(1, 2).setValue("Activity Name");
+              lapsSheet.getRange(2, 2).setValue(activity.name);
+              lapsSheet.getRange(1, 3).setValue("Interval Number");
+              lapsSheet.getRange(2, 3).setValue(parseInt(interval_no) + 1);
 
-            RUN_LAPS_DATA.forEach((d, idx) => lapsSheet.getRange(2, idx + 4).setValue( 
-              _getFieldValue(d, interval) 
-            ))
-          })
+              RUN_LAPS_DATA.forEach((d, idx) => lapsSheet.getRange(2, idx + 4).setValue( 
+                _getFieldValue(d, interval) 
+              ))
+            // }
+            })
       }
     }
   }
@@ -252,22 +255,18 @@ function _shouldIncludeInJournal(activity) {
   return isRun(activity);
 }
 function _shouldIncludeInterval(interval) {
-  return true;// interval.type !== "RECOVERY";
+  return interval.distance >= DEFAULTS.MIN_INCLUDED_LAP_DISTANCE_METERS;// interval.type !== "RECOVERY";
 }
 
-// Check if need to download activity laps. Possible markers:
+// Check if need to download activity laps. 
+// Other possible markers:
 // icu_intensity > 80
 // icu_rpe > 3
 // icu_training_load
-//icu_intervals_edited
+// icu_intervals_edited
 function _shouldGetLaps(activity) {
-  return true;//activity.icu_intensity > 79;
+  return true;
 }
-
-
-
-
-
 
 
 
@@ -640,93 +639,3 @@ function groupActivitiesByDay(activities) {
     return hr ? Math.round(hr) : "--"; 
   }
 
-
-  /** PRINTs */
-
-
-  function printLap(lap) {
-    var distance = getDistance(lap.distance);
-    var pace = getPace(lap.average_speed) + "/km ";
-    var time = "";
-    if (distance < "0.50") {
-      time = " (" + lap.elapsed_time + "s) ";
-    }
-    return "- " +
-      distance + " km " + pace +
-      "❤️" + getHr(lap.average_heartrate) + "/" + getHr(lap.max_heartrate) +
-      time + "\n";
-  }
-
-function _printTitle(a) {
-  return a.type;
-}
-
-function _printDesc(a) {
-  return "🗒️" + a.name;
-}
-
-function printRun(a) {
-  return _printTitle(a) + " \n" +
-    "👟" + getDistance(a.distance) + " km " + getPace(a.average_speed) + "/km \n" + 
-    "❤️" + getHr(a.average_heartrate) + " bpm \n" +
-    "⛰️" + a.total_elevation_gain + " m+ \n" + 
-    "⏱" + getDuration(a.moving_time)+ " \n"+
-    _printDesc(a) + "\n\n"; 
-}
-
-function printWorkout(a) {
-    return _printTitle(a) + " \n" +
-      "⏱" + getDuration(a.moving_time)+ " \n"+ 
-      "❤️" + getHr(a.average_heartrate) + " bpm \n"+
-      _printDesc(a) + "\n\n"; 
-}
-    
-function printSwim(a) {
-  return _printTitle(a) + " \n" +
-    "🌊" + a.distance + " m " + getSwimPace(a.average_speed) + "/100m \n" + 
-    "❤️" + getHr(a.average_heartrate) + " bpm \n" +
-    "⏱" + getDuration(a.moving_time)+ " \n" + 
-    _printDesc(a) + "\n\n"; 
-}
-
-function printRide(a) {
-    return _printTitle(a) + " \n" +
-    "🚴" + getDistance(a.distance) + " km " + getSpeed(a.average_speed) + "km/h \n" + 
-    "❤️" + getHr(a.average_heartrate) + " bpm  \n" +
-    "⛰️" + a.total_elevation_gain + " m+ " + " 🔋" + a.average_watts +"w \n" + 
-    "⏱" + getDuration(a.moving_time)+ " \n" + 
-    _printDesc(a) + "\n\n"; 
-}
-
-function printSki(a) {
-  return _printTitle(a) + " \n" +
-    "🎿" + getDistance(a.distance) + " km " + getPace(a.average_speed) + "/km \n" + 
-    "❤️" + getHr(a.average_heartrate) + " bpm \n" +
-    "⏱" + getDuration(a.moving_time)+ " \n" + 
-    _printDesc(a) + "\n\n"; 
-}
-
-function printLaps(activityId) {
-  var laps = fetchRunLaps(activityId);
-  var lapData = "Laps:\n";
-  
-  laps.forEach(
-    function(lap){
-      lapData = lapData + printLap(lap);
-    }
-  );
-  return lapData;
-}
-
-function printLap(lap) {
-  var distance = getDistance(lap.distance);
-  var pace = getPace(lap.average_speed) + "/km ";
-  var time = "";
-  if (distance < "0.50") {
-    time = " (" + lap.elapsed_time + "s) ";
-  }
-  return "- " +
-    distance + " km " + pace +
-    "❤️" + getHr(lap.average_heartrate) + "/" + getHr(lap.max_heartrate) +
-    time + "\n";
-}
